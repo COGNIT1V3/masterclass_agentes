@@ -1,3 +1,5 @@
+import os
+from langchain_google_genai import ChatGoogleGenerativeAI
 from dotenv import load_dotenv
 from typing import Annotated
 from typing_extensions import TypedDict
@@ -16,10 +18,10 @@ tool = TavilySearch(max_results=3)
 
 # llm
 
-llm = ChatOpenAI(
-    model="gpt-4o-mini",
-    temperature=0.3, 
-    max_tokens=1000,
+llm = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash",
+    api_key=os.getenv("GEMINI_API_KEY"),
+    temperature=0.3,
     streaming=True,
     callbacks=[StreamingStdOutCallbackHandler()]
 )

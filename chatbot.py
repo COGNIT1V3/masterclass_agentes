@@ -1,20 +1,21 @@
+import os
 from dotenv import load_dotenv
 from typing import Annotated
 from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 
 load_dotenv()
 
 # llm
 
-llm = ChatOpenAI(
-    model="gpt-4o-mini",
-    temperature=0.3, 
-    max_tokens=1000,
+llm = ChatGoogleGenerativeAI(
+    model="gemini-2.5-pro",   # o "gemini-1.5-flash"
+    api_key=os.getenv("GEMINI_API_KEY"),      # o usa variable de entorno GOOGLE_API_KEY
     streaming=True,
+    temperature=0.3,
     callbacks=[StreamingStdOutCallbackHandler()]
 )
 
