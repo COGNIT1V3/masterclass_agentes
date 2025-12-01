@@ -3,13 +3,13 @@ from typing import Annotated
 from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
-from langchain_openai import ChatOpenAI
-from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_tavily import TavilySearch
 from langgraph.prebuilt import ToolNode, tools_condition
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.memory import MemorySaver # Recordar conversación sólo en memoria	
+from langgraph.checkpoint.sqlite import SqliteSaver # Recordar conversación en una base de datos SQLite
 import sqlite3
+import os
 
 load_dotenv()
 
@@ -26,12 +26,9 @@ tool = TavilySearch(max_results=3)
 
 # llm
 
-llm = ChatOpenAI(
-    model="gpt-4o-mini",
-    temperature=0.3, 
-    max_tokens=1000,
-    streaming=True,
-    callbacks=[StreamingStdOutCallbackHandler()]
+llm = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash",
+    api_key=os.getenv("GEMINI_API_KEY")
 )
 
 llm_with_tools = llm.bind_tools([tool])
