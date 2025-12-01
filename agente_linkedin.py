@@ -14,6 +14,8 @@ from langgraph.types import Command, interrupt
 from langchain_core.tools import tool
 import sys
 from langchain_core.messages import HumanMessage, SystemMessage
+import os
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 load_dotenv()
 
@@ -98,12 +100,9 @@ tools = [
 
 # llm
 
-llm = ChatOpenAI(
-    model="gpt-4o-mini",
-    temperature=0.3, 
-    max_tokens=1000,
-    streaming=True,
-    callbacks=[StreamingStdOutCallbackHandler()]
+llm = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash",
+    api_key=os.getenv("GEMINI_API_KEY")
 )
 
 llm_with_tools = llm.bind_tools(tools)
@@ -115,26 +114,40 @@ class State(TypedDict):
 
 def agent1(state: State):
     system_prompt = """
-        Eres un agente especializado en validar ideas de negocio. Tu tarea es:
-        1. Recibir una business idea del usuario
-        2. Analizar la idea para identificar industrias, roles y tipos de empresas relevantes para la validación de la idea (deben ser potenciales clientes)
+Eres un agente especializado en encontrar perfiles junior del sector informático en LinkedIn, con no más de 3 años de experiencia laboral. Tu tarea es:
+1. Recibir una descripción del tipo de perfil que el usuario necesita
+2. Analizarla para identificar roles y tipos de empresas relevantes
+3. Generar consultas de búsqueda específicas y accionables para LinkedIn que encuentren personas de Argentina interesadas en moverse a España
 
-        Cuando recibas una business idea:
+Cuando recibas una descripción de perfil:
 
-        PASO 1: Analiza la idea de negocio e identifica:
-        - ¿Qué industrias son potenciales clientes?
-        - ¿Qué roles/posiciones son potenciales clientes?
-        - ¿Qué tipos de empresas son potenciales clientes?
-        - ¿Qué expertise específico sería valioso para la validación de la idea?
+PASO 1: Analiza el perfil objetivo e identifica:
+- ¿Qué roles/posiciones junior son relevantes? (ej.: "Junior Software Developer", "Junior Data Analyst", "Junior QA Engineer")
+- ¿Qué tecnologías, lenguajes o áreas indican que es sector informático? (ej.: "Python", "Java", "Front-end", "Ciberseguridad", "DevOps")
+- ¿Qué tipo de empresas son adecuadas? (ej.: consultoras IT, startups tecnológicas, empresas de producto digital, hubs tecnológicos)
+- ¿Qué señales indican interés en movilidad hacia España? 
+  (ej.: "open to relocation", "relocation to Spain", "mudanza a España", "trabajar en España", "open to work Spain", "Europe", "UE")
 
-        PASO 2: Forma consultas de búsqueda específicas y targeted para LinkedIn:
-        - En lugar de buscar la idea completa, busca términos específicos como:
-          * "restaurant industry CEO" 
-          * "pet services entrepreneur"
-          * "fintech startup founder"
-          * "healthcare technology director"
-        
-        No uses ninguna herramienta, sólo responde con la información que has encontrado.
+PASO 2: Ten en cuenta el foco geográfico:
+- Perfiles que actualmente estén en Argentina (ej.: "Argentina", "Buenos Aires", "Córdoba", "Rosario", etc.)
+- Interés explícito o implícito en moverse a España
+- Usa combinaciones de términos como:
+  - "Argentina" AND "relocation Spain"
+  - "Argentina" AND "interesado en trabajar en España"
+
+PASO 3: Forma consultas de búsqueda específicas y orientadas a LinkedIn:
+- En lugar de usar descripciones largas, crea combinaciones de:
+  * Rol/posición junior
+  * Tecnología/área (opcional)
+  * Términos de movilidad o interés en España
+  * Referencia clara a Argentina como ubicación actual
+
+Ejemplos de consultas:
+- "Junior Software Developer Argentina open to relocation Spain"
+- "Junior Data Engineer Argentina trabajar en España"
+- "Junior Python developer Argentina interested in moving to Spain"
+
+No uses ninguna herramienta externa, sólo responde con las consultas de búsqueda que has generado y, opcionalmente, una breve explicación de a qué tipo de perfil apunta cada consulta.
     """
     conversation = [
         SystemMessage(content=system_prompt),
@@ -144,35 +157,55 @@ def agent1(state: State):
 
 def agent2(state: State):
     system_prompt = """
-        Eres un agente especializado en validar ideas de negocio. Tu tarea es:
-        1. Recibir consultas de búsqueda específicas de linkedin para validar una business idea
-        2. Buscar perfiles de LinkedIn estratégicos que puedan ayudar a validar la idea
-        3. Devolver el resultado de la búsqueda
+        Eres un agente especializado en encontrar y pre-qualificar perfiles de informática para contratación usando LinkedIn. Tu tarea es:
+        1. Recibir consultas de búsqueda específicas de LinkedIn orientadas a contratar perfiles informáticos
+        2. Buscar perfiles de LinkedIn relevantes para esas consultas
+        3. Devolver un resumen estructurado de los perfiles encontrados junto con mensajes de contacto y preguntas clave para evaluar el encaje
+
 
         Cuando recibas una consulta de búsqueda específica de linkedin:
 
         PASO 1: Usa linkedin_search con los términos específicos que identificaste 
 
-        PASO 2: Para cada perfil encontrado, crea un mensaje de introducción personalizado que se adapte a la industria, posición y empresa del perfil así como una lista de 3 preguntas que se pueden hacer para validar la idea.
+        PASO 2: Para cada perfil encontrado, devuelve la siguiente información:
+        - Nombre completo
+        - Titular de LinkedIn (headline)
+        - Ubicación
+        - Rol/posición actual (si está disponible)
+        - Tecnologías/claves técnicas mencionadas (ej.: Python, Java, React, AWS, Data, QA, etc.)
+        - Nivel estimado (junior / mid / senior) en base a años de experiencia y puestos anteriores
+        - Enlace al perfil (si está disponible en la respuesta de la herramienta)
+
+        PASO 3: Para cada perfil encontrado, crea:
+        - Un mensaje de contacto personalizado orientado a reclutamiento/colaboración que:
+          * Mencione el rol o stack relevante del perfil
+          * Destaque brevemente el tipo de oportunidad (ej.: "puesto junior en backend en Málaga, España", "oportunidad remota en Europa", etc.)
+          * Sea breve, profesional y cercano
+IMPORTANTE: Necesito perfiles reales de linkedin, no perfiles de empresas y/o personas inventadas.
 
         Ejemplo:
-        Business idea: "Una app que ayuda a encontrar restaurantes pet-friendly"
-        Búsqueda: "restaurant industry executives" (no "Una app que ayuda a encontrar restaurantes pet-friendly")
+        Consulta: "Junior Python Developer Buenos Aires open to work"
         Resultado:
-        - Perfil 1: "John Doe, CEO of Pet Friendly Restaurants"
-            - Mensaje de introducción: "Hola John, me llamo [Tu nombre] y soy [Tu rol]. Estoy trabajando en una startup que busca validar la idea de una app que ayuda a encontrar restaurantes pet-friendly. ¿Te gustaría saber más sobre la app y cómo podría ayudarte?"
-            - Lista de 3 preguntas:
-            * ¿Qué te parece la idea de una app que ayuda a encontrar restaurantes pet-friendly?
-            * ¿Qué te parece la idea de una app que ayuda a encontrar restaurantes pet-friendly?
-            * ¿Qué te parece la idea de una app que ayuda a encontrar restaurantes pet-friendly?
-        - Perfil 2: "Jane Smith, Founder of Pet Services"
-            - Mensaje de introducción: "Hola Jane, me llamo [Tu nombre] y soy [Tu rol]. Estoy trabajando en una startup que busca validar la idea de una app que ayuda a encontrar restaurantes pet-friendly. ¿Te gustaría saber más sobre la app y cómo podría ayudarte?"
-            - Lista de 3 preguntas:
-            * ¿Qué te parece la idea de una app que ayuda a encontrar restaurantes pet-friendly?
-            * ¿Qué te parece la idea de una app que ayuda a encontrar restaurantes pet-friendly?
-            * ¿Qué te parece la idea de una app que ayuda a encontrar restaurantes pet-friendly?
+        - Perfil 1: "Ana García, Junior Python Developer | Data & Backend"
+            - Ubicación: Buenos Aires, Argentina
+            - Tecnologías: Python, Django, SQL, APIs REST
+            - Nivel estimado: Junior
+            - Mensaje de contacto:
+              "Hola Ana, soy [Tu nombre] y trabajo en [Tu empresa]. Estamos buscando un/a Junior Python Developer en Málaga, para un proyecto de backend y data con Python y Django. He visto tu experiencia y encaja muy bien con lo que buscamos. 
+              ¿Te interesaría que te cuente más detalles sobre el puesto y el equipo?"
+            
+
+        - Perfil 2: "Carlos López, Junior Backend Developer | Python | Flask"
+            - Ubicación: Córdoba, Argentina
+            - Tecnologías: Python, Flask, PostgreSQL, Docker
+            - Nivel estimado: Junior
+            - Mensaje de contacto:
+              "Hola Carlos, soy [Tu nombre] y formo parte del equipo de selección en [Tu empresa]. Estamos ampliando nuestro equipo backend con perfiles junior que trabajen con Python y bases de datos relacionales. 
+              He visto tu experiencia con Python y Flask y me parece muy alineada con lo que estamos construyendo. 
+              ¿Te gustaría que te comparta más detalles sobre el proyecto y las condiciones?"
+
         Sé proactivo y ejecuta las herramientas necesarias sin esperar confirmación.
-    """
+            """
     conversation = [
         SystemMessage(content=system_prompt),
         *state["messages"]
@@ -196,12 +229,12 @@ with open("graph.png", "wb") as f:
 # ejecución
 
 while True:
-    business_idea = input("💡 Business Idea: ")
-    if business_idea.lower() in ["quit", "exit", "q"]:
+    profile_description = input("💡 Profile Description: ")
+    if profile_description.lower() in ["quit", "exit", "q"]:
         print("Goodbye! 👋")
         break
     events = graph.stream(
-        {"messages": [{"role": "user", "content": business_idea}]},
+        {"messages": [{"role": "user", "content": profile_description}]},
         config, # para seguir un hilo de conversación
         stream_mode="values",
     )
